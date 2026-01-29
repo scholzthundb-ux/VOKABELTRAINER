@@ -86,6 +86,8 @@
         <button class="ghost" id="btnKnow">Konnte ich</button>
         <button class="ghost" id="btnDont">Nicht gekonnt</button>
         <button class="ghost" id="btnNew">Neu ziehen</button>
+        <!-- NEU: Löschen direkt im Abfragemenü -->
+        <button class="danger" id="btnDelete" title="Diese Vokabel löschen">Diese löschen</button>
       </div>
 
       <div class="sep"></div>
@@ -202,6 +204,7 @@
     btnKnow: $("btnKnow"),
     btnDont: $("btnDont"),
     btnNew: $("btnNew"),
+    btnDelete: $("btnDelete"), // NEU
     btnImport: $("btnImport"),
     btnUndo: $("btnUndo"),
     btnClear: $("btnClear"),
@@ -367,6 +370,7 @@
       ui.qMeta.textContent = "Rechts importieren.";
       ui.answerBox.classList.remove("show");
       updateStarUI(-1);
+      ui.btnDelete.disabled = true; // NEU
       return;
     }
 
@@ -378,6 +382,7 @@
       ui.qMeta.textContent = "★ setzen oder Modus ausschalten.";
       ui.answerBox.classList.remove("show");
       updateStarUI(-1);
+      ui.btnDelete.disabled = true; // NEU
       return;
     }
 
@@ -393,6 +398,7 @@
     ui.qMeta.textContent = `Richtung: ${dir} • Favorit: ${w.fav ? "ja" : "nein"}`;
     ui.answerBox.classList.remove("show");
     updateStarUI(idx);
+    ui.btnDelete.disabled = false; // NEU
   }
 
   function updateUI() {
@@ -415,6 +421,36 @@
   // --- Export ---
   function exportText() {
     return words.map(w => `${w.fav ? "★ " : ""}${w.a};${w.b}`).join("\n");
+  }
+
+  // --- NEU: Delete current entry (single item, duplicates allowed) ---
+  function deleteCurrent() {
+    if (!current || current.idx == null) return;
+
+    const idx = current.idx;
+    const w = words[idx];
+    if (!w) return;
+
+    const label = `${w.a} ⇄ ${w.b}${w.fav ? " ★" : ""}`;
+    const ok = confirm(`Diese Vokabel wirklich löschen?\n\n${label}`);
+    if (!ok) return;
+
+    // Remove exactly this one entry
+    words.splice(idx, 1);
+    saveWords(words);
+
+    // If last import marker exists, adjust it if deletion touches the tail
+    // (keeps undo logic sensible, but doesn't overcomplicate)
+    const lastCount = loadNum(LS_LAST_IMPORT, 0);
+    if (lastCount > 0) {
+      // deletion inside the last imported block? It's impossible to know precisely.
+      // Simple rule: if we still have at least lastCount items, keep it; else clamp.
+      saveNum(LS_LAST_IMPORT, Math.min(lastCount, words.length));
+    }
+
+    updateUI();
+    pickCard();
+    msg("Vokabel gelöscht.");
   }
 
   // --- Event handlers ---
@@ -448,6 +484,9 @@
     ui.qMeta.textContent = `Richtung: ${current.dir} • Favorit: ${words[idx].fav ? "ja" : "nein"}`;
     msg(words[idx].fav ? "Als Favorit markiert." : "Favorit entfernt.");
   });
+
+  // NEU: Delete button
+  ui.btnDelete.addEventListener("click", deleteCurrent);
 
   function toggleFavOnly() {
     favOnly = !favOnly;
