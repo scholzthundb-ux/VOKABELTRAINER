@@ -1,77 +1,574 @@
 <!doctype html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vokabeltrainer</title>
-<style>
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:20px}
-.card{border:1px solid #ccc;border-radius:14px;padding:16px;max-width:600px}
-.big{font-size:1.6rem;font-weight:700}
-.answer{margin-top:10px;font-size:1.6rem;font-weight:700;display:none}
-button{padding:10px 14px;border-radius:10px;border:1px solid #888;background:#f5f5f5;margin-right:6px}
-textarea{width:100%;min-height:140px;margin-top:12px}
-.stats{margin-top:10px;font-size:.95rem;color:#555}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vokabeltrainer</title>
+  <style>
+    :root { --pad: 14px; --radius: 14px; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background:#f6f7fb; color:#111; }
+    header { padding: 16px; background: white; position: sticky; top: 0; border-bottom: 1px solid #e9e9ef; }
+    h1 { margin: 0 0 8px 0; font-size: 18px; }
+    .wrap { max-width: 1020px; margin: 0 auto; padding: 14px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 900px){ .grid { grid-template-columns: 1.1fr .9fr; } }
+    .card { background: white; border: 1px solid #e9e9ef; border-radius: var(--radius); padding: var(--pad); box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    button, textarea, input {
+      font: inherit; border-radius: 12px; border: 1px solid #d8d8e6; background: white; padding: 10px 12px;
+    }
+    button { cursor: pointer; }
+    button.primary { background: #111; color: white; border-color: #111; }
+    button.danger { background: #b00020; color: white; border-color: #b00020; }
+    button.ghost { background: #f2f3f9; }
+    button.star { font-size: 18px; padding: 8px 12px; }
+    button.star.on { background: #fff3bf; border-color: #ffd43b; }
+    textarea { width: 100%; min-height: 190px; resize: vertical; }
+    .big { font-size: 22px; font-weight: 700; line-height: 1.25; }
+    .muted { color: #666; font-size: 13px; }
+    .pill { padding: 6px 10px; border-radius: 999px; background:#f2f3f9; border: 1px solid #e5e6f2; font-size: 12px; }
+    .sep { height:1px; background:#eee; margin: 12px 0; }
+    .answer { display:none; margin-top: 8px; padding: 10px 12px; background:#f8f8ff; border:1px solid #e7e7ff; border-radius: 12px; }
+    .answer.show { display:block; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; background:#f2f3f9; border:1px solid #e5e6f2; padding:2px 6px; border-radius:8px; }
+    .stat { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; }
+    .stat > div { padding: 10px 12px; border:1px solid #eee; border-radius: 12px; background:#fafafe; }
+    .small { font-size: 12px; color:#555; }
+    .slider { display:flex; align-items:center; gap:10px; flex-wrap: wrap; }
+    input[type="range"]{ width: 180px; }
+    .toggle { display:flex; align-items:center; gap:10px; }
+    .switch { width: 48px; height: 28px; border-radius: 999px; border:1px solid #d8d8e6; background:#f2f3f9; position: relative; cursor: pointer; }
+    .knob { width: 22px; height: 22px; border-radius: 50%; background: white; border:1px solid #d8d8e6; position: absolute; top: 2px; left: 2px; transition: left .15s ease; }
+    .switch.on { background:#111; border-color:#111; }
+    .switch.on .knob { left: 24px; border-color:#111; }
+    .err { color:#b00020; }
+  </style>
 </head>
 <body>
-
-<h1>Vokabeltrainer</h1>
-
-<div class="card">
-  <div id="question" class="big">–</div>
-  <div id="answer" class="answer"></div>
-
-  <div style="margin-top:12px">
-    <button onclick="showAnswer()">Lösung zeigen</button>
-    <button onclick="known(true)">Gewusst</button>
-    <button onclick="known(false)">Nicht gewusst</button>
+<header>
+  <div class="wrap">
+    <h1>Vokabeltrainer</h1>
+    <div class="row">
+      <span class="pill" id="countPill">0 Vokabeln</span>
+      <span class="pill" id="favPill">0 Favoriten</span>
+      <span class="pill" id="modePill">Modus: Alle</span>
+      <span class="pill">Duplikate erlaubt</span>
+      <span class="pill">Speichert lokal (auf diesem Gerät)</span>
+    </div>
   </div>
+</header>
 
-  <div class="stats" id="stats"></div>
+<div class="wrap">
+  <div class="grid">
+    <!-- QUIZ -->
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div style="min-width: 240px">
+          <div class="muted">Aktuelle Karte</div>
+          <div class="big" id="qFront">—</div>
+          <div class="muted" id="qMeta">—</div>
+        </div>
+        <div class="row">
+          <button class="star ghost" id="btnStar" title="Favorit (F)">☆</button>
+          <button class="ghost" id="btnNext" title="Nächste (N)"><span class="kbd">N</span> Nächste</button>
+          <button class="primary" id="btnShow" title="Antwort (Space)"><span class="kbd">␣</span> Antwort</button>
+        </div>
+      </div>
 
-  <textarea id="input" placeholder="Deutsch;Spanisch
-Haus;casa
-essen;comer"></textarea>
-  <br>
-  <button onclick="importWords()">Import +</button>
+      <div class="answer" id="answerBox">
+        <div class="muted">Antwort</div>
+        <div class="big" id="qBack">—</div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="row">
+        <button class="ghost" id="btnKnow">Konnte ich</button>
+        <button class="ghost" id="btnDont">Nicht gekonnt</button>
+        <button class="ghost" id="btnNew">Neu ziehen</button>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="stat">
+        <div><div class="muted">Heute gekonnt</div><div class="big" id="stKnow">0</div></div>
+        <div><div class="muted">Heute nicht gekonnt</div><div class="big" id="stDont">0</div></div>
+        <div><div class="muted">Sessions</div><div class="big" id="stSessions">0</div></div>
+        <div><div class="muted">Letzter Import</div><div class="big" id="stLastImport">—</div></div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="toggle">
+        <div class="muted">Nur Favoriten trainieren</div>
+        <div class="switch" id="favOnlySwitch" role="switch" aria-checked="false" tabindex="0">
+          <div class="knob"></div>
+        </div>
+      </div>
+      <div class="small" style="margin-top:6px">
+        Wenn aktiv, kommen nur ★-markierte Einträge.
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="slider">
+        <div class="muted">Favoriten häufiger (nur im Modus „Alle“):</div>
+        <input id="favWeight" type="range" min="0" max="80" value="30" />
+        <div class="pill"><span id="favWeightLabel">30</span>%</div>
+      </div>
+      <div class="small" style="margin-top:6px">
+        Bei jeder neuen Karte: mit dieser Wahrscheinlichkeit wird ein Favorit gezogen (wenn vorhanden).
+      </div>
+
+      <div class="sep"></div>
+      <div class="small">
+        Tastatur: <span class="kbd">Space</span> Antwort • <span class="kbd">N</span> nächste • <span class="kbd">K</span> konnte • <span class="kbd">D</span> nicht • <span class="kbd">F</span> ★
+      </div>
+    </div>
+
+    <!-- IMPORT/EXPORT -->
+    <div class="card">
+      <div class="muted">Import (wird angehängt)</div>
+      <p class="small" style="margin-top:6px;margin-bottom:10px">
+        Eine Vokabel pro Zeile. Dein Format passt: <span class="kbd">Deutsch;spanisch</span><br>
+        Favorit im Import: <span class="kbd">★ telefonieren; llamar</span> oder <span class="kbd">⭐ ...</span><br>
+        Weitere Trenner gehen auch: Tab, <span class="kbd">=</span>, <span class="kbd">:</span>, <span class="kbd">|</span>, <span class="kbd">-></span>, <span class="kbd">-</span>, <span class="kbd">–</span>, <span class="kbd">—</span>
+      </p>
+
+      <textarea id="importText" placeholder="z.B.&#10;telefonieren; llamar/hablar (por teléfono)&#10;★ aufwachen; despertarse"></textarea>
+
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="btnImport">Import anhängen</button>
+        <button class="ghost" id="btnUndo">Letzten Import rückgängig</button>
+        <button class="ghost" id="btnClear">Textfeld leeren</button>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="muted">Export / Backup</div>
+      <div class="row" style="margin-top:10px">
+        <button class="ghost" id="btnExport">Als TXT exportieren (mit ★)</button>
+        <button class="ghost" id="btnCopy">Alles kopieren (mit ★)</button>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="muted">Werkzeug</div>
+      <div class="row" style="margin-top:10px">
+        <button class="danger" id="btnReset">Alles löschen</button>
+      </div>
+
+      <div class="sep"></div>
+      <div class="small" id="msg" aria-live="polite">—</div>
+      <div class="small err" id="err" aria-live="polite"></div>
+    </div>
+  </div>
 </div>
 
 <script>
-let words=[],index=0,knownCount=0;
+(() => {
+  "use strict";
 
-function importWords(){
-  const lines=document.getElementById('input').value.split('\n');
-  words=lines.map(l=>l.split(';')).filter(l=>l.length===2);
-  index=0;knownCount=0;
-  show();
-  updateStats();
-}
+  // --- Storage keys (new + clean) ---
+  const LS_WORDS = "birgit.vokabeltrainer.words.v1";
+  const LS_STATS = "birgit.vokabeltrainer.stats.v1";
+  const LS_LAST_IMPORT = "birgit.vokabeltrainer.lastImportCount.v1";
+  const LS_FAV_WEIGHT = "birgit.vokabeltrainer.favWeight.v1";
+  const LS_FAV_ONLY = "birgit.vokabeltrainer.favOnly.v1";
 
-function show(){
-  if(!words.length)return;
-  document.getElementById('question').textContent=words[index][0];
-  document.getElementById('answer').style.display='none';
-}
+  // --- DOM helpers ---
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    countPill: $("countPill"),
+    favPill: $("favPill"),
+    modePill: $("modePill"),
+    qFront: $("qFront"),
+    qBack: $("qBack"),
+    qMeta: $("qMeta"),
+    answerBox: $("answerBox"),
+    importText: $("importText"),
+    msg: $("msg"),
+    err: $("err"),
+    stKnow: $("stKnow"),
+    stDont: $("stDont"),
+    stSessions: $("stSessions"),
+    stLastImport: $("stLastImport"),
+    favWeight: $("favWeight"),
+    favWeightLabel: $("favWeightLabel"),
+    favOnlySwitch: $("favOnlySwitch"),
+    btnStar: $("btnStar"),
+    btnShow: $("btnShow"),
+    btnNext: $("btnNext"),
+    btnKnow: $("btnKnow"),
+    btnDont: $("btnDont"),
+    btnNew: $("btnNew"),
+    btnImport: $("btnImport"),
+    btnUndo: $("btnUndo"),
+    btnClear: $("btnClear"),
+    btnExport: $("btnExport"),
+    btnCopy: $("btnCopy"),
+    btnReset: $("btnReset"),
+  };
 
-function showAnswer(){
-  const a=document.getElementById('answer');
-  a.textContent=words[index][1];
-  a.style.display='block';
-}
+  // --- Utilities ---
+  const clean = (s) => (s ?? "").toString().trim().replace(/\s+/g, " ");
+  const pad = (n) => String(n).padStart(2, "0");
+  const todayISO = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  };
+  const msg = (t) => { ui.msg.textContent = t; ui.err.textContent = ""; };
+  const err = (t) => { ui.err.textContent = t; };
 
-function known(ok){
-  if(ok)knownCount++;
-  index=(index+1)%words.length;
-  show();
-  updateStats();
-}
+  function safeParseJSON(raw, fallback) {
+    try { return JSON.parse(raw); } catch { return fallback; }
+  }
 
-function updateStats(){
-  document.getElementById('stats').textContent=
-    `Vokabeln: ${words.length} | Gewusst: ${knownCount}`;
-}
+  // --- Data model ---
+  // word: {a: string, b: string, fav: boolean}  // duplicates allowed
+  function loadWords() {
+    const raw = localStorage.getItem(LS_WORDS);
+    if (!raw) return [];
+    const arr = safeParseJSON(raw, []);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(w => w && typeof w.a === "string" && typeof w.b === "string")
+      .map(w => ({ a: clean(w.a), b: clean(w.b), fav: !!w.fav }));
+  }
+  function saveWords(words) {
+    localStorage.setItem(LS_WORDS, JSON.stringify(words));
+  }
+
+  function loadStats() {
+    const def = { today: todayISO(), know: 0, dont: 0, sessions: 0, lastImport: "" };
+    const raw = localStorage.getItem(LS_STATS);
+    if (!raw) return def;
+    const s = safeParseJSON(raw, def);
+    return { ...def, ...s };
+  }
+  function saveStats(stats) {
+    localStorage.setItem(LS_STATS, JSON.stringify(stats));
+  }
+  function resetDaily(stats) {
+    const t = todayISO();
+    if (stats.today !== t) {
+      stats.today = t;
+      stats.know = 0;
+      stats.dont = 0;
+    }
+    return stats;
+  }
+
+  function loadNum(key, fallback) {
+    const v = Number(localStorage.getItem(key));
+    return Number.isFinite(v) ? v : fallback;
+  }
+  function loadBool(key, fallback) {
+    const v = localStorage.getItem(key);
+    if (v === null) return fallback;
+    return v === "1";
+  }
+  function saveBool(key, val) { localStorage.setItem(key, val ? "1" : "0"); }
+  function saveNum(key, val) { localStorage.setItem(key, String(val)); }
+
+  // --- Robust import parser (your list works 100%) ---
+  function parseLines(text) {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const out = [];
+
+    for (let line of lines) {
+      let isFav = false;
+
+      // ★ or ⭐ at start
+      line = line.replace(/^\s+/, "");
+      if (line.startsWith("★") || line.startsWith("⭐")) {
+        isFav = true;
+        line = line.slice(1).trim();
+      }
+
+      // Remove bullets/numbering if present (copy/paste from notes)
+      line = line.replace(/^\s*(?:[•*\-–—]+|\(?\d+\)?[.)]|\(?[a-zA-Z]\)?[.)])\s+/, "");
+
+      // Primary: split on first semicolon if present (your exact format)
+      if (line.includes(";")) {
+        const idx = line.indexOf(";");
+        const a = clean(line.slice(0, idx));
+        const b = clean(line.slice(idx + 1));
+        if (a && b) out.push({ a, b, fav: isFav });
+        continue;
+      }
+
+      // Secondary: tab or common separators (first occurrence)
+      const m = line.match(/^(.*?)\s*(?:\t|=|:|\||->|=>|[-–—])\s*(.*?)$/);
+      if (!m) continue;
+
+      const a = clean(m[1]);
+      const b = clean(m[2]);
+      if (a && b) out.push({ a, b, fav: isFav });
+    }
+
+    return out;
+  }
+
+  // --- Quiz engine ---
+  let words = loadWords();
+  let stats = resetDaily(loadStats()); saveStats(stats);
+
+  let favWeight = Math.max(0, Math.min(80, loadNum(LS_FAV_WEIGHT, 30)));
+  let favOnly = loadBool(LS_FAV_ONLY, false);
+
+  ui.favWeight.value = String(favWeight);
+  ui.favWeightLabel.textContent = String(favWeight);
+
+  function setSwitch(on) {
+    ui.favOnlySwitch.classList.toggle("on", on);
+    ui.favOnlySwitch.setAttribute("aria-checked", on ? "true" : "false");
+    ui.modePill.textContent = `Modus: ${on ? "Nur Favoriten" : "Alle"}`;
+  }
+  setSwitch(favOnly);
+
+  function favIndices() {
+    const idxs = [];
+    for (let i = 0; i < words.length; i++) if (words[i].fav) idxs.push(i);
+    return idxs;
+  }
+  function randInt(n) { return Math.floor(Math.random() * n); }
+
+  let current = null; // { idx, dir, front, back }
+
+  function updateStarUI(idx) {
+    const on = (idx >= 0 && words[idx] && words[idx].fav);
+    ui.btnStar.textContent = on ? "★" : "☆";
+    ui.btnStar.classList.toggle("on", !!on);
+  }
+
+  function pickIndex() {
+    if (words.length === 0) return -1;
+
+    const favs = favIndices();
+    const hasFav = favs.length > 0;
+
+    if (favOnly) {
+      if (!hasFav) return -2;
+      return favs[randInt(favs.length)];
+    }
+
+    if (hasFav && (Math.random() * 100) < favWeight) {
+      return favs[randInt(favs.length)];
+    }
+    return randInt(words.length);
+  }
+
+  function pickCard() {
+    if (words.length === 0) {
+      current = null;
+      ui.qFront.textContent = "Noch keine Vokabeln";
+      ui.qBack.textContent = "—";
+      ui.qMeta.textContent = "Rechts importieren.";
+      ui.answerBox.classList.remove("show");
+      updateStarUI(-1);
+      return;
+    }
+
+    const idx = pickIndex();
+    if (idx === -2) {
+      current = null;
+      ui.qFront.textContent = "Keine Favoriten vorhanden";
+      ui.qBack.textContent = "—";
+      ui.qMeta.textContent = "★ setzen oder Modus ausschalten.";
+      ui.answerBox.classList.remove("show");
+      updateStarUI(-1);
+      return;
+    }
+
+    const w = words[idx];
+    const dir = Math.random() < 0.5 ? "A→B" : "B→A";
+    const front = dir === "A→B" ? w.a : w.b;
+    const back  = dir === "A→B" ? w.b : w.a;
+
+    current = { idx, dir, front, back };
+
+    ui.qFront.textContent = front;
+    ui.qBack.textContent = back;
+    ui.qMeta.textContent = `Richtung: ${dir} • Favorit: ${w.fav ? "ja" : "nein"}`;
+    ui.answerBox.classList.remove("show");
+    updateStarUI(idx);
+  }
+
+  function updateUI() {
+    const favCount = words.reduce((acc, w) => acc + (w.fav ? 1 : 0), 0);
+    ui.countPill.textContent = `${words.length} Vokabel${words.length === 1 ? "" : "n"}`;
+    ui.favPill.textContent = `${favCount} Favorit${favCount === 1 ? "" : "en"}`;
+
+    stats = resetDaily(stats);
+    ui.stKnow.textContent = String(stats.know);
+    ui.stDont.textContent = String(stats.dont);
+    ui.stSessions.textContent = String(stats.sessions);
+    ui.stLastImport.textContent = stats.lastImport ? stats.lastImport : "—";
+
+    const lastCount = loadNum(LS_LAST_IMPORT, 0);
+    ui.btnUndo.disabled = !(lastCount > 0);
+
+    setSwitch(favOnly);
+  }
+
+  // --- Export ---
+  function exportText() {
+    return words.map(w => `${w.fav ? "★ " : ""}${w.a};${w.b}`).join("\n");
+  }
+
+  // --- Event handlers ---
+  ui.btnShow.addEventListener("click", () => { if (current) ui.answerBox.classList.toggle("show"); });
+  ui.btnNext.addEventListener("click", () => pickCard());
+  ui.btnNew.addEventListener("click", () => { pickCard(); msg("Neu gezogen."); });
+
+  ui.btnKnow.addEventListener("click", () => {
+    stats = resetDaily(stats);
+    stats.know++; stats.sessions++;
+    saveStats(stats);
+    updateUI();
+    pickCard();
+  });
+
+  ui.btnDont.addEventListener("click", () => {
+    stats = resetDaily(stats);
+    stats.dont++; stats.sessions++;
+    saveStats(stats);
+    updateUI();
+    pickCard();
+  });
+
+  ui.btnStar.addEventListener("click", () => {
+    if (!current) return;
+    const idx = current.idx;
+    words[idx].fav = !words[idx].fav;
+    saveWords(words);
+    updateUI();
+    updateStarUI(idx);
+    ui.qMeta.textContent = `Richtung: ${current.dir} • Favorit: ${words[idx].fav ? "ja" : "nein"}`;
+    msg(words[idx].fav ? "Als Favorit markiert." : "Favorit entfernt.");
+  });
+
+  function toggleFavOnly() {
+    favOnly = !favOnly;
+    saveBool(LS_FAV_ONLY, favOnly);
+    updateUI();
+    pickCard();
+    msg(favOnly ? "Modus: Nur Favoriten." : "Modus: Alle.");
+  }
+  ui.favOnlySwitch.addEventListener("click", toggleFavOnly);
+  ui.favOnlySwitch.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFavOnly(); }
+  });
+
+  ui.favWeight.addEventListener("input", () => {
+    favWeight = Math.max(0, Math.min(80, Number(ui.favWeight.value)));
+    ui.favWeightLabel.textContent = String(favWeight);
+    saveNum(LS_FAV_WEIGHT, favWeight);
+  });
+
+  ui.btnClear.addEventListener("click", () => { ui.importText.value = ""; msg("Textfeld geleert."); });
+
+  ui.btnImport.addEventListener("click", () => {
+    try {
+      const text = ui.importText.value.trim();
+      if (!text) return msg("Nichts zu importieren.");
+
+      const parsed = parseLines(text);
+      if (parsed.length === 0) return err("Keine gültigen Zeilen erkannt. Beispiel: telefonieren;llamar");
+
+      const favFound = parsed.reduce((acc, x) => acc + (x.fav ? 1 : 0), 0);
+
+      // append only, duplicates allowed
+      words = words.concat(parsed);
+      saveWords(words);
+
+      saveNum(LS_LAST_IMPORT, parsed.length);
+
+      stats = resetDaily(stats);
+      stats.lastImport = `${todayISO()} (+${parsed.length})`;
+      saveStats(stats);
+
+      updateUI();
+      pickCard();
+      msg(`Import ok: +${parsed.length} (★: ${favFound})`);
+    } catch (e) {
+      err("Import-Fehler im Script. Sag mir kurz welchen Browser du nutzt.");
+      console.error(e);
+    }
+  });
+
+  ui.btnUndo.addEventListener("click", () => {
+    const lastCount = loadNum(LS_LAST_IMPORT, 0);
+    if (!(lastCount > 0)) return;
+
+    const ok = confirm(`Letzten Import rückgängig machen? (${lastCount} Einträge werden entfernt)`);
+    if (!ok) return;
+
+    words = words.slice(0, Math.max(0, words.length - lastCount));
+    saveWords(words);
+    saveNum(LS_LAST_IMPORT, 0);
+
+    updateUI();
+    pickCard();
+    msg(`Rückgängig: -${lastCount}`);
+  });
+
+  ui.btnExport.addEventListener("click", () => {
+    if (words.length === 0) return msg("Nichts zu exportieren.");
+    const lines = exportText();
+    const blob = new Blob([lines], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `vokabeln_${todayISO()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+    msg("Export gestartet.");
+  });
+
+  ui.btnCopy.addEventListener("click", async () => {
+    if (words.length === 0) return msg("Nichts zu kopieren.");
+    try {
+      await navigator.clipboard.writeText(exportText());
+      msg("In Zwischenablage kopiert.");
+    } catch {
+      err("Kopieren nicht erlaubt. Nutze Export.");
+    }
+  });
+
+  ui.btnReset.addEventListener("click", () => {
+    const ok = confirm("Wirklich ALLES löschen?");
+    if (!ok) return;
+    words = [];
+    saveWords(words);
+    saveNum(LS_LAST_IMPORT, 0);
+    updateUI();
+    pickCard();
+    msg("Alles gelöscht.");
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener("keydown", (e) => {
+    if (e.target && (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT")) return;
+    if (e.code === "Space") { e.preventDefault(); ui.btnShow.click(); }
+    if (e.key === "n" || e.key === "N") ui.btnNext.click();
+    if (e.key === "k" || e.key === "K") ui.btnKnow.click();
+    if (e.key === "d" || e.key === "D") ui.btnDont.click();
+    if (e.key === "f" || e.key === "F") ui.btnStar.click();
+  });
+
+  // Global error to message box (helps on mobile without console)
+  window.addEventListener("error", (ev) => {
+    err("Script-Fehler: " + (ev.message || "unbekannt"));
+  });
+
+  // Init
+  updateUI();
+  pickCard();
+  msg("Bereit.");
+})();
 </script>
-
 </body>
 </html>
